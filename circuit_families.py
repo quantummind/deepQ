@@ -7,8 +7,10 @@ from scipy.stats import powerlaw
 from pyquil import Program
 from pyquil.gates import *
 from pyquil.api import get_qc
+from pyquil.api import WavefunctionSimulator
 
 from rules import *
+from multiprocessing import Pool
 
 def random_program_all_gates(qc, n_gates):
     qubits = np.array(qc.qubits()).astype(str)
@@ -84,7 +86,7 @@ def circuit_to_program(qc, circ, num_qubits=-1, pragmas=True, preserve=True, mea
         
     return p
 
-def random_circuit(qc, dims, id_prob=0.5):
+def random_circuit(qc, dims, id_prob=0.5, symmetrize=False):
     # RZ argument random float
     
     # generate qubit by qubit then pad identities and insert '' whenever a CZ is made
@@ -92,6 +94,8 @@ def random_circuit(qc, dims, id_prob=0.5):
     circ = np.zeros(dims).astype(str)
     
     depth = dims[0]
+    if symmetrize:
+        depth = depth // 2
     qubit_range = dims[1]
     
     qubits = np.array(qc.qubits()[:qubit_range])
@@ -193,8 +197,12 @@ def dagger_gates(gates):
             daggered.append(negative)
     return np.array(daggered)
 
-def symmetrize_circuit(c):
-    c_sym = np.empty((c.shape[0]*2, c.shape[1])).astype(str)
+def symmetrize_circuit(c, dims):
+    c_sym = np.empty((dims[0], c.shape[1])).astype(str)
+    
+    # insert column of identities if needs to be odd depth
+    if dims[0] % 2 == 1:
+        c_sym[c.shape[0], :] = 'I'
     c_sym[:c.shape[0]] = c
     for i in range(len(c)):
         c_sym[len(c_sym) - i - 1] = dagger_gates(c[i])
@@ -206,11 +214,12 @@ def shuffle_pad_circuit(circ_orig, identities):
     # randomly re-arrange gates in a row (between CZ or '')
     circ = np.copy(circ_orig)
     tcirc = circ.T
-    max_len = np.amax(list(identities.keys())) + 1
     for i in range(len(tcirc)):
-        cz1_inds = np.where(tcirc[i] == 'CZ')[0]
-        cz2_inds = np.where(tcirc[i] == '')[0]
-        merged = np.sort(np.concatenate((cz1_inds, cz2_inds)))
+        merged = []
+        for j in range(len(tcirc[i])):
+            if 'CZ' in tcirc[i][j] or tcirc[i][j] == '':
+                merged.append(j)
+        merged = np.array(merged)
         for j in range(len(merged) - 1):
             segment = tcirc[i][merged[j]+1:merged[j+1]]
             nonidentities = segment[np.where(segment != 'I')]
@@ -245,6 +254,7 @@ def pad_circuit(circ_orig, identities):
                 tcirc[i][r] = all_ids
     return tcirc.T
 
+# TODO multithread
 def generate_circuit_families(qc, dims, num_unique, num_padded, symmetrize=False):
     identities = pickle.load(open('output/identities-0-5-pi.pkl', 'rb'))
     # trim out qubit index in identities
@@ -257,15 +267,29 @@ def generate_circuit_families(qc, dims, num_unique, num_padded, symmetrize=False
     families = []
     for i in range(num_unique):
         print(i, 'out of', num_unique)
-        c = random_circuit(qc, dims)
+        c = random_circuit(qc, dims, symmetrize=symmetrize)
         if symmetrize:
-            c = symmetrize_circuit(c)
+            c = symmetrize_circuit(c, dims)
         family = [c]
         for j in range(num_padded):
             pc = shuffle_pad_circuit(c, identities)
+#             zero = wf_simulate_circuit(qc, pc)['00000000']
+#             if zero < 0.95:
+#                 print('FAILED PADDING')
+#             print(zero)
             family.append(pc)
         families.append(family)
     return np.array(families)
+
+def wf_simulate_program(p):
+    wf_sim = WavefunctionSimulator()
+    wf = wf_sim.wavefunction(p)
+    clean = wf.get_outcome_probs()
+    return clean
+
+def wf_simulate_circuit(qc, c):
+    p = circuit_to_program(qc, c, measure=False)
+    return wf_simulate_program(p)
 
 def run_program(qc, p):
     nq = qc.compiler.quil_to_native_quil(p)
@@ -273,8 +297,8 @@ def run_program(qc, p):
     return qc.run(ep)
 
 if __name__ == '__main__':
-    qc = get_qc("Aspen-4-8Q-C", as_qvm=True)
-    qft_circuit = np.load('output/qft-8.npz')['arr_0']
+    qc = get_qc("Aspen-4-5Q-C", as_qvm=True)
+    qft_circuit = np.load('output/qft-zeroed-5.npz')['arr_0']
     
     num_unique = 500
     num_padded = 20
@@ -283,7 +307,7 @@ if __name__ == '__main__':
 #     print(c)
 #     np.save('output/test-circuit.npy', c)
     
-    families = generate_circuit_families(qc, qft_circuit.shape, num_unique, num_padded, symmetrize=False)
+    families = generate_circuit_families(qc, qft_circuit.shape, num_unique, num_padded, symmetrize=True)
     np.savez_compressed('output/circuit-families-random.npz', families)
 
 #     depth = 4

@@ -71,7 +71,8 @@ def commute_program(s):
     return np.array(circuit)
 
 if __name__ == '__main__':
-    qc = get_qc("Aspen-4-8Q-C", as_qvm=True)
+    qft_size = 5
+    qc = get_qc("Aspen-4-5Q-C", as_qvm=True)
     qc.compiler.client.timeout = 60
     
     identities = pickle.load(open('output/identities-0-5-pi.pkl', 'rb'))
@@ -81,8 +82,8 @@ if __name__ == '__main__':
         for s in v:
             v2.append(s.replace(' 0\n', '\n').split('\n')[:-1])
         identities[k] = v2
-        
-    i = 8
+    
+    i = qft_size
         
     # insert layer of Hadamards before QFT, so true outcome is all 0s
     s = ''
@@ -96,17 +97,7 @@ if __name__ == '__main__':
     c = commute_program(str(nq))[:, :i]
     print('c', c)
 
-    np.savez_compressed('output/qft-zeroed-8.npz', c)
-
-    # TEST EQUALITY
-    from pyquil.api import WavefunctionSimulator
-    wf_sim = WavefunctionSimulator()
-    wf1 = wf_sim.wavefunction(p)
-    wf2 = wf_sim.wavefunction(circuit_to_program(qc, c, measure=False))
-    clean1 = wf1.get_outcome_probs()
-    clean2 = wf2.get_outcome_probs()
-    print('clean 1', clean1)
-    print('clean 2', clean2)
+    np.savez_compressed('output/qft-zeroed-' + str(qft_size) + '.npz', c)
         
 #         family = [c]
 #         for j in range(num_padded):
