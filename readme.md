@@ -3,7 +3,7 @@
 
 A. Zlokapa and A. Gheorghiu, “A deep learning approach to noise prediction and circuit optimization for near-term quantum devices.” *IEEE/ACM International Conference on High Performance Computing, Networking, Storage and Analysis*, November 2019.
 
-The project focuses on intelligently compiling random circuits with dynamical decoupling to minimize noise according to a trained ResNet noise model. **For an overview of results, see** `main.ipynb`.
+The project focuses on intelligently compiling random circuits with dynamical decoupling to minimize noise according to a trained convolutional neural network noise model. **For an overview of results, see** `main.ipynb`.
 
 ## Overview
 
