@@ -8,26 +8,63 @@ from os import listdir
 import torch.optim as optim
 from torch.optim.lr_scheduler import *
 import torch.backends.cudnn as cudnn
-from model import resnet_tiny, resnet18, resnet34, resnet50, resnet101, resnet152
+from model import SmallNet
 import sys
 import glob
 
-# converts Rigetti I, RX, RZ, CZ set to 4-channel image
-def circuit_to_image(c):
-    image = np.zeros((4, c.shape[0], c.shape[1]))
-    pi = np.pi
-    for i in range(len(c)):
-        for j in range(len(c[i])):
-            if c[i][j] == 'I':
-                image[0][i][j] = 1
-            elif 'RX' in c[i][j]:
-                image[1][i][j] = eval(c[i][j][3:-1])
-            elif 'RZ' in c[i][j]:
-                image[2][i][j] = eval(c[i][j][3:-1])
-            elif 'CZ' in c[i][j]:
-                image[3][i][j] = 1.0
-            elif c[i][j] == '':
-                image[3][i][j] = -1.0
+# shape: (# channels, # layers, # qubits)
+# only put u3 and cx channels; u1 and u2 are encoded in u3 channel since they are rare
+def circuit_to_image(s3, n_channels=4, max_size=44):
+    # create array to determine where gaps are, assuming latest-as-possible scheduling
+    trimmed = s3[s3.find('creg'):s3.find('barrier')].splitlines()[1:]
+    trimmed.reverse()
+    n = 5
+    circuit_arr = np.zeros((n, max_size), dtype=np.int64)
+    circuit_img = np.zeros((n, max_size, n_channels))
+    for ind in range(len(trimmed)):
+        line = trimmed[ind]
+        offset = 0
+        qubits = []
+        for i in range(2):
+            q1_start = line.find('q', offset)
+            if q1_start == -1:
+                break
+            q1_end = line.find(']', q1_start)
+            qubit = line[q1_start+2:q1_end]
+            qubits.append(int(qubit))
+            offset = q1_end
+        col_num = []
+        for q in qubits:
+            if len(np.nonzero(circuit_arr[q])[0]) != 0:
+                col_num.append(np.max(np.nonzero(circuit_arr[q])))
+        if len(col_num) == 0:
+            col_num = 0
+        else:
+            col_num = np.max(col_num) + 1
+        if col_num >= max_size:
+            break
+        for i in range(len(qubits)):
+            q = qubits[i]
+            circuit_arr[q][col_num] = 1 + ind
+            if 'u1' in line:
+                args = line[line.find('(') + 1 : line.find(')')].split(',')
+                circuit_img[q][col_num][0] = eval(args[0])
+                circuit_img[q][col_num][1] = -1
+                circuit_img[q][col_num][2] = -1
+            elif 'u2' in line:
+                args = line[line.find('(') + 1 : line.find(')')].split(',')
+                circuit_img[q][col_num][0] = eval(args[0])
+                circuit_img[q][col_num][1] = eval(args[1])
+                circuit_img[q][col_num][2] = -1
+            elif 'u3' in line:
+                args = line[line.find('(') + 1 : line.find(')')].split(',')
+                circuit_img[q][col_num][0] = eval(args[0])
+                circuit_img[q][col_num][1] = eval(args[1])
+                circuit_img[q][col_num][2] = eval(args[2])
+            elif 'cx' in line:
+                circuit_img[q][col_num][3] = i*2 - 1
+    
+    image = np.swapaxes(circuit_img, 0, 2)
     return image
     
 def family_to_images(family):
@@ -37,22 +74,26 @@ def family_to_images(family):
     return images
 
 if __name__ == '__main__':
-    data_prefix = 'output/simulations-random-5/readouts1000-noisy-'
-    families_file = 'output/circuit-families-random-5.npz'
-    model_dir = 'output/models/'
+    noise_file = 'supremacy_all_5_unique/burlington_noise.npy'
+    circuits_file = 'supremacy_all_5_unique/burlington_circuits.npy'
+    model_dir = 'models/'
+    evaluate_validation = True
 
-
-    resnet_depth = 0
     dropout = False
     parallel_data = True
-    scheduled = False
-    train_batch_size = 16
+    scheduled = True
+    train_batch_size = 4
     concat_data = False
     epochs = 2000
-    prefix = 'random5'
-
+    
+    small_LR = False
+    prefix = 'run_5_only_burlington'
+    
+    data_files_filename = model_dir + prefix + '_files.npy'
+    
+#     prefix += '_supersmallsimplemodel_'
+    prefix += '_smallsimplemodel'
     prefix += '_batch' + str(train_batch_size)
-    prefix += '_' + str(resnet_depth)
 
     if dropout:
         prefix += '_drop'
@@ -60,6 +101,8 @@ if __name__ == '__main__':
         prefix += '_scheduledLR2'
     if concat_data:
         prefix += '_concatdata'
+    if not evaluate_validation:
+        prefix += '_alltrain'
 
     early_stop_filename = model_dir + prefix + '_early_stop.mdl'
     final_model_filename = model_dir + prefix + '_final_model.mdl'
@@ -70,44 +113,46 @@ if __name__ == '__main__':
     validate_fraction = 0.1
 
     def make_model(n_channels, concat_features=False):
-        if resnet_depth == 18:
-            return resnet18(n_channels=n_channels, use_dropout=dropout, concat_features=concat_features)
-        elif resnet_depth == 34:
-            return resnet34(n_channels=n_channels, use_dropout=dropout, concat_features=concat_features)
-        elif resnet_depth == 50:
-            return resnet50(n_channels=n_channels, use_dropout=dropout, concat_features=concat_features)
-        elif resnet_depth == 101:
-            return resnet101(n_channels=n_channels, use_dropout=dropout, concat_features=concat_features)
-        elif resnet_depth == 152:
-            return resnet152(n_channels=n_channels, use_dropout=dropout, concat_features=concat_features)
-        elif resnet_depth == 0:
-            return resnet_tiny(n_channels=n_channels, use_dropout=dropout, concat_features=concat_features)
-
-    families = np.load(families_file)['arr_0']
+        return SmallNet(n_channels=n_channels, concat_features=concat_features)
+    
+    
+    np_target = np.load(noise_file)
     np_data = []
-    np_target = []
-    filenames = []
-
-    # load data
-    files = sorted(glob.glob(data_prefix + '*'))
-    if len(files) == 0:
-        print('NO DATA')
-
-    family_size = len(np.load(files[0]))
-    for i in range(len(files)):
-        arr = np.load(files[i])
-        if len(arr) == family_size:
-            filenames.append(files[i])
-            ind = int(files[i].split('.')[0].split('-')[-1])
-            np_target.append(np.sum(arr, axis=(1, 2, 3))/arr.shape[1])
-            np_data.append(family_to_images(families[ind]))
+    raw_data = np.load(circuits_file)
+    for f in raw_data:
+        np_data.append(family_to_images(f))
+    filenames = [noise_file, circuits_file]
+    
+    
+#     np_target = None
+#     files = sorted(glob.glob(data_dir + '*.npy'))
+#     for f in files:
+#         a = np.load(f).reshape((group_size, -1))
+#         if np_target is None:
+#             np_target = a
+#         else:
+#             np_target = np.concatenate((np_target, a))
+    
+#     filenames = []
+#     np_data = []
+#     for i in range(np_target.shape[0]):
+#         f = circuit_dir + str(i).zfill(5) + '.npy'
+#         a = np.load(f)
+#         filenames.append(f)
+#         np_data.append(family_to_images(a))
 
     np_data = np.array(np_data)
-    np_target = np.array(np_target)
     filenames = np.array(filenames)
     np.save(data_files_filename, np.array(filenames))
     print('data shape', np_data.shape)
     print('target shape', np_target.shape)
+    
+    # shuffle to remove time ordering of runs
+    np.random.seed(0)
+    order = np.arange(np_data.shape[0])
+    np.random.shuffle(order)
+    np_data = np_data[order]
+    np_target = np_target[order]
 
 
     # normalize data
@@ -115,15 +160,19 @@ if __name__ == '__main__':
     channel_stdev = np.std(np_data, axis=(0, 1, 3, 4))
     transform = transforms.Normalize(channel_mean, channel_stdev)
 
-    train_len = int(train_fraction*len(np_data))
-    valid_len = int(validate_fraction*len(np_data))
+    if evaluate_validation:
+        train_len = int(train_fraction*len(np_data))
+        valid_len = int(validate_fraction*len(np_data))
+        
+        test_dataset = CircuitPairDataset(np_data[train_len:train_len + valid_len], np_target[train_len:train_len + valid_len], transform=transform, reflect=False)
+        valid_dataset = CircuitPairDataset(np_data[train_len + valid_len:], np_target[train_len + valid_len:], transform=transform, reflect=False)
+        test_loader = DataLoader(test_dataset, batch_size=512, shuffle=True, num_workers=2, pin_memory=torch.cuda.is_available())
+        valid_loader = DataLoader(valid_dataset, batch_size=512, shuffle=False, num_workers=2, pin_memory=torch.cuda.is_available())
+    else:
+        train_len = len(np_data)
 
     train_dataset = CircuitPairDataset(np_data[:train_len], np_target[:train_len], transform=transform)
-    test_dataset = CircuitPairDataset(np_data[train_len:train_len + valid_len], np_target[train_len:train_len + valid_len], transform=transform)
-    valid_dataset = CircuitPairDataset(np_data[train_len + valid_len:], np_target[train_len + valid_len:], transform=transform)
     train_loader = DataLoader(train_dataset, batch_size=train_batch_size, shuffle=True, num_workers=2, pin_memory=torch.cuda.is_available())
-    test_loader = DataLoader(test_dataset, batch_size=512, shuffle=True, num_workers=2, pin_memory=torch.cuda.is_available())
-    valid_loader = DataLoader(valid_dataset, batch_size=512, shuffle=False, num_workers=2, pin_memory=torch.cuda.is_available())
 
     # create model
     model = make_model(2*len(np_data[0][0]))
@@ -133,12 +182,19 @@ if __name__ == '__main__':
 
     lr = 1.0e-2
     if scheduled:
-        lr = 5.0e-2
+        lr = 2.0e-2
+        if train_batch_size > 32:
+            lr = 0.2
+    if train_batch_size <= 4 and small_LR:
+        lr = 0.1e-2
     momentum = 0.9
+    wd = 0
+    if 'reg' in prefix:
+        wd = 0.0001
 
-    criterion = nn.L1Loss().cuda()
-    # optimizer = optim.Adam(model.parameters(), weight_decay=weight_decay)
-    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum)
+    criterion = nn.MSELoss().cuda()
+#     optimizer = optim.Adam(model.parameters())
+    optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=wd)
     cudnn.benchmark = True
 
     best_loss = -1
@@ -146,7 +202,12 @@ if __name__ == '__main__':
 
     scheduler = None
     if scheduled:
-        scheduler = StepLR(optimizer, step_size=15, gamma=0.2)
+        ss = 15
+        g = 0.2
+        if train_batch_size >= 64:
+            ss = 30
+            g = 0.5
+        scheduler = StepLR(optimizer, step_size=ss, gamma=0.5)
 
     # TODO make into cross-validation with nfolds
     for epoch in range(epochs):
@@ -174,57 +235,65 @@ if __name__ == '__main__':
         if scheduled:
             scheduler.step()
         train_loss = running_loss/count
-
+        
+        
         # evaluate model on validation set
-        model.eval()
-        running_loss = 0.0
-        count = 0
-        for i, data in enumerate(valid_loader, 0):
-            inputs, circuit_lengths, labels = data
-            inputs = inputs.cuda()
-            circuit_lengths = circuit_lengths.cuda()
-            labels = labels.cuda()
-            if concat_data:
-                outputs = model(inputs, circuit_lengths)
-            else:
-                outputs = model(inputs)
-            loss = criterion(outputs, labels)
+        if evaluate_validation:
+            model.eval()
+            running_loss = 0.0
+            count = 0
+            for i, data in enumerate(valid_loader, 0):
+                inputs, circuit_lengths, labels = data
+                inputs = inputs.cuda()
+                circuit_lengths = circuit_lengths.cuda()
+                labels = labels.cuda()
+                if concat_data:
+                    outputs = model(inputs, circuit_lengths)
+                else:
+                    outputs = model(inputs)
+                loss = criterion(outputs, labels)
 
-            running_loss += loss.item()
-            count += 1
-        valid_loss = running_loss / count
-        if (valid_loss < best_loss) or (best_loss == -1):
-            best_loss = valid_loss
-            torch.save({'epoch':epoch+1, 'state_dict':model.state_dict(), 'best_loss':best_loss}, early_stop_filename)
-        losses[0][epoch] = train_loss
-        losses[1][epoch] = valid_loss
-        if ((epoch + 1) % 10 == 0) or ((epoch + 1) == epochs):
+                running_loss += loss.item()
+                count += 1
+            valid_loss = running_loss / count
+            if (valid_loss < best_loss) or (best_loss == -1):
+                best_loss = valid_loss
+                torch.save({'epoch':epoch+1, 'state_dict':model.state_dict(), 'best_loss':best_loss}, early_stop_filename)
+            losses[0][epoch] = train_loss
+            losses[1][epoch] = valid_loss
+            if ((epoch + 1) % 10 == 0) or ((epoch + 1) == epochs):
+                torch.save({'epoch':epoch+1, 'state_dict':model.state_dict(), 'loss_history':losses}, final_model_filename)
+            print(epoch + 1, train_loss, valid_loss, sep='\t')
+        else:
+            losses[0][epoch] = train_loss
             torch.save({'epoch':epoch+1, 'state_dict':model.state_dict(), 'loss_history':losses}, final_model_filename)
-        print(epoch + 1, train_loss, valid_loss, sep='\t')
+            print(epoch + 1, train_loss, sep='\t')
 
-    checkpoint = torch.load(early_stop_filename)
-    model = make_model(2*len(np_data[0]), concat_data)
-    model.cuda()
-    if parallel_data:
-        model = nn.DataParallel(model)
-    model.load_state_dict(checkpoint['state_dict'])
+            
+    if evaluate_validation:
+        checkpoint = torch.load(early_stop_filename)
+        model = make_model(2*len(np_data[0]), concat_data)
+        model.cuda()
+        if parallel_data:
+            model = nn.DataParallel(model)
+        model.load_state_dict(checkpoint['state_dict'])
 
-    # evaluate early stopping on test set
-    model.eval()
-    all_labels = np.zeros(0)
-    all_predictions = np.zeros(0)
-    for i, data in enumerate(test_loader, 0):
-        inputs, labels = data
+        # evaluate early stopping on test set
+        model.eval()
+        all_labels = np.zeros(0)
+        all_predictions = np.zeros(0)
+        for i, data in enumerate(test_loader, 0):
+            inputs, labels = data
 
-        inputs = inputs.cuda()
-        outputs = model(inputs)
-        labels = np.reshape(labels.numpy(), len(labels))
-        outputs = outputs.cpu().detach().numpy()
-        outputs = np.reshape(outputs, len(outputs))
+            inputs = inputs.cuda()
+            outputs = model(inputs)
+            labels = np.reshape(labels.numpy(), len(labels))
+            outputs = outputs.cpu().detach().numpy()
+            outputs = np.reshape(outputs, len(outputs))
 
-        all_labels = np.append(all_labels, labels)
-        all_predictions = np.append(all_predictions, outputs)
+            all_labels = np.append(all_labels, labels)
+            all_predictions = np.append(all_predictions, outputs)
 
 
-    np.save(predictions_filename, all_predictions)
-    np.save(labels_filename, all_labels)
+        np.save(predictions_filename, all_predictions)
+        np.save(labels_filename, all_labels)
