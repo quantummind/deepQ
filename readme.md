@@ -9,6 +9,10 @@ The project focuses on intelligently compiling random circuits with dynamical de
 
 * `main.ipynb`: Summary of results, comparing deep learning dynamical decoupling compiler to the IBM Q compiler.
 
+### Data
+
+To run the code and notebooks, unzip the data available at https://caltech.box.com/s/jni52ra5qpq28f9tunaob9auwvisavb9 and add it directly to the main directory of the project.
+
 ### Circuit generation
 
 * `generate_circuits.py`: Helper functions for making supremacy-style circuits with a layer of random single-qubit gates from {sqrt(X), sqrt(Y), sqrt(Z)} followed by a CX gate between any two qubits. Generation of training set, `supremacy_all_5_unique/burlington_circuits.npy`.
