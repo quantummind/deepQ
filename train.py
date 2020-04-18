@@ -14,11 +14,10 @@ import glob
 
 # shape: (# channels, # layers, # qubits)
 # only put u3 and cx channels; u1 and u2 are encoded in u3 channel since they are rare
-def circuit_to_image(s3, n_channels=4, max_size=44):
+def circuit_to_image(s3, n=5, n_channels=4, max_size=44):
     # create array to determine where gaps are, assuming latest-as-possible scheduling
     trimmed = s3[s3.find('creg'):s3.find('barrier')].splitlines()[1:]
     trimmed.reverse()
-    n = 5
     circuit_arr = np.zeros((n, max_size), dtype=np.int64)
     circuit_img = np.zeros((n, max_size, n_channels))
     for ind in range(len(trimmed)):
@@ -87,7 +86,7 @@ if __name__ == '__main__':
     epochs = 2000
     
     small_LR = False
-    prefix = 'run_5_only_burlington'
+    prefix = 'burlington'
     
     data_files_filename = model_dir + prefix + '_files.npy'
     
@@ -113,7 +112,14 @@ if __name__ == '__main__':
     validate_fraction = 0.1
 
     def make_model(n_channels, concat_features=False):
-        return SmallNet(n_channels=n_channels, concat_features=concat_features)
+        if 'super' in prefix:
+            return SuperSmallNet(n_channels=n_channels, concat_features=concat_features)
+        elif 'small2' in prefix:
+            return SmallNet2(n_channels=n_channels, concat_features=concat_features)
+        elif 'small' in prefix:
+            return SmallNet(n_channels=n_channels, concat_features=concat_features)
+        else:
+            return Net(n_channels=n_channels, concat_features=concat_features)
     
     
     np_target = np.load(noise_file)

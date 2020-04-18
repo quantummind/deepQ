@@ -2,16 +2,17 @@ import numpy as np
 from qiskit import *
 import torch
 from model import SmallNet
-from train import circuit_to_image, family_to_images
+from train_5qubit import circuit_to_image, family_to_images
 import torchvision.transforms as transforms
 from model import CircuitPairDataset
 from torch.utils.data import DataLoader
 import glob
 from generate_circuits import pad_circuit
 from multiprocessing import Pool
+import random
 
 parallel_data = True
-prefixes = ['models/run_5_only_burlington_smallsimplemodel_batch4_scheduledLR2_']
+prefixes = ['models/burlington_smallsimplemodel_batch4_scheduledLR2_']
 n_files = -1
 model_type = SmallNet
     
@@ -24,7 +25,7 @@ tries = 1000
 tournament_size = 20
 
 
-pool_size = 20
+pool_size = 25
 thread_size = tries // pool_size
 test_circuits = np.load('test_circuits_5.npy')
 
@@ -105,10 +106,11 @@ def find_best(circuit_data, predictions):
 def pad_family(s, length=thread_size):
     family = []
     for i in range(length):
-        family.append(pad_circuit(s, backend))
-    if family[1] is None:
-        print('NONE')
-        return family, None
+        if random.uniform(0, 1) > 1/16:
+            family.append(pad_circuit(s, backend, n=5))
+        else:
+            family.append(s)
+    random.shuffle(family)
     return family, family_to_images(family)
 
 if __name__ == '__main__':
@@ -135,7 +137,6 @@ if __name__ == '__main__':
         for i in range(len(out)):
             entry = out[i]
             if entry[1] is not None:
-                valid_circuits.append(s)
                 out_family.extend(entry[0])
                 out_data.extend(entry[1])
         
@@ -165,6 +166,7 @@ if __name__ == '__main__':
         predictions = predict(data)
         best_circuit = find_best(data, predictions)[0]
         compiled_circuits.append(family[best_circuit])
+        valid_circuits.append(s)
 
-        np.save('test_compiled.npy', compiled_circuits)
-        np.save('test_free.npy', valid_circuits)
+        np.save('test_5_compiled.npy', compiled_circuits)
+        np.save('test_5_free.npy', valid_circuits)

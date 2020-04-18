@@ -133,13 +133,12 @@ def zero_runs(a):
     ranges = np.where(absdiff == 1)[0].reshape(-1, 2)
     return ranges
 
-def pad_circuit(qasm_code, bend):
+def pad_circuit(qasm_code, bend, n=5):
     s3 = qasm_code
 
     # create array to determine where gaps are, assuming latest-as-possible scheduling
     trimmed = s3[s3.find('creg'):s3.find('barrier')].splitlines()[1:]
     trimmed.reverse()
-    n = 5
     circuit_arr = np.zeros((n, len(trimmed)), dtype=np.int64)
     for ind in range(len(trimmed)):
         line = trimmed[ind]
@@ -209,12 +208,12 @@ def pad_circuit(qasm_code, bend):
     return pc
 
 
-def make_family(ind, length=16, directory='./supremacy_all_5_unique/'):
+def make_family(ind, length=16, n=5, directory='./supremacy_all_5_unique/'):
     try_again = True
     while try_again:
         try_again = False
         family = []
-        s = supremacy_circuit(m=5)
+        s = supremacy_circuit(n=n, m=5)
 
         # compile to optimization_level=3
         qc = QuantumCircuit.from_qasm_str(s)
@@ -228,7 +227,7 @@ def make_family(ind, length=16, directory='./supremacy_all_5_unique/'):
 
             family.append(c)
             for i in range(length-1):
-                family.append(pad_circuit(c, backend))
+                family.append(pad_circuit(c, backend, n=n))
                 if family[1] is None:
                     try_again = True
                     break
@@ -238,8 +237,8 @@ def make_family(ind, length=16, directory='./supremacy_all_5_unique/'):
 if __name__ == '__main__':
     IBMQ.load_account()
     provider = IBMQ.get_provider(group='open')
-    backend = provider.get_backend('ibmq_essex')
+    backend = provider.get_backend('ibmq_burlington')
     
     num_circuits = 1000
-    with Pool(20) as p:
+    with Pool(28) as p:
         p.map(make_family, np.arange(num_circuits))

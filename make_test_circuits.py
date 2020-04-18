@@ -10,6 +10,7 @@ if __name__ == '__main__':
     backend = provider.get_backend('ibmq_burlington')
     
     n_circuits = 1000
+    n = 5
     circuits = []
     for i in range(n_circuits):
         print(i)
@@ -18,7 +19,7 @@ if __name__ == '__main__':
         while try_again:
             try_again = False
             family = []
-            s = supremacy_circuit(m=3)
+            s = supremacy_circuit(n=n, m=5)
 
             # compile to optimization_level=3
             qc = QuantumCircuit.from_qasm_str(s)
@@ -30,7 +31,7 @@ if __name__ == '__main__':
             if not try_again:
                 c = qc_t.qasm()
 
-                p = pad_circuit(c, backend)
+                p = pad_circuit(c, backend, n=n)
                 if p is None:
                     try_again = True
         

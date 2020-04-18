@@ -23,8 +23,9 @@ To run the code and notebooks, unzip the data available at https://caltech.box.c
 * `model.py`: Definition of neural network and circuit pair dataset structure.
 * `train.py`: Train model on training set with 80% training set, 10% validation set (for early stopping), and 10% test set.
 * `test_compiler.py`: Compile test circuits with maximum IBM Q compiler optimization (saved in `test_free.npy`) and then pad the output of that with the deep learning model (saved in `test_compiled.npy`).
+* `result_plotter.ipynb`: Evaluate model performance on training/validation/test set.
 
 ### Circuit Evaluation
 
 * `run_circuits.py`: Run training set circuits, saved in `supremacy_all_5_unique/burlington_noise.npy`.
-* `run_test_compiled.py`: Run test set circuits, including free evolution and compiled. Save in `test_noise_5_only_*` depending on selected device.
+* `run_test_compiled.py`: Run test set circuits, including free evolution and compiled, saved in `test_noise_5`.
