@@ -35,7 +35,7 @@ def run_type(data, imin, imax):
         f.append(ones/shots)
     return f
 
-def run(imin, imax, i, d='test_noise_5/'):
+def run(imin, imax, i, d='test_noise_5_burlington/'):
     id_freqs = run_type(identities, imin, imax)
     co_freqs = run_type(compiled, imin, imax)
     

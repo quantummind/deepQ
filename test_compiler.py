@@ -12,7 +12,7 @@ from multiprocessing import Pool
 import random
 
 parallel_data = True
-prefixes = ['models/burlington_smallsimplemodel_batch4_scheduledLR2_']
+prefixes = ['models/burlington_batch4_scheduledLR2_']
 n_files = -1
 model_type = SmallNet
     
@@ -46,10 +46,7 @@ for prefix in prefixes:
     
 
 noise_file = 'supremacy_all_5_unique/burlington_noise.npy'
-circuits_file = 'supremacy_all_5_unique/burlington_circuits.npy'
-
-# noise_file = 'supremacy_all_5_unique/run1_noise.npy'
-# circuits_file = 'supremacy_all_5_unique/run1_circuits.npy'
+circuits_file = 'supremacy_all_5_unique/circuits.npy'
 
 np_target = np.load(noise_file)
 np_data = []

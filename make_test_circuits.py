@@ -35,13 +35,6 @@ if __name__ == '__main__':
                 if p is None:
                     try_again = True
         
-#         s = supremacy_circuit(backend)
-        
-        # compile to optimization_level=3
-#         qc = QuantumCircuit.from_qasm_str(s)
-#         qc_t = transpile(qc, backend=backend, optimization_level=3)
-#         c = qc_t.qasm()
-        
         circuits.append(c)
     circuits = np.array(circuits)
     np.save('test_circuits_5.npy', circuits)

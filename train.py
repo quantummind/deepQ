@@ -74,7 +74,7 @@ def family_to_images(family):
 
 if __name__ == '__main__':
     noise_file = 'supremacy_all_5_unique/burlington_noise.npy'
-    circuits_file = 'supremacy_all_5_unique/burlington_circuits.npy'
+    circuits_file = 'supremacy_all_5_unique/circuits.npy'
     model_dir = 'models/'
     evaluate_validation = True
 
@@ -90,8 +90,6 @@ if __name__ == '__main__':
     
     data_files_filename = model_dir + prefix + '_files.npy'
     
-#     prefix += '_supersmallsimplemodel_'
-    prefix += '_smallsimplemodel'
     prefix += '_batch' + str(train_batch_size)
 
     if dropout:
@@ -129,23 +127,6 @@ if __name__ == '__main__':
         np_data.append(family_to_images(f))
     filenames = [noise_file, circuits_file]
     
-    
-#     np_target = None
-#     files = sorted(glob.glob(data_dir + '*.npy'))
-#     for f in files:
-#         a = np.load(f).reshape((group_size, -1))
-#         if np_target is None:
-#             np_target = a
-#         else:
-#             np_target = np.concatenate((np_target, a))
-    
-#     filenames = []
-#     np_data = []
-#     for i in range(np_target.shape[0]):
-#         f = circuit_dir + str(i).zfill(5) + '.npy'
-#         a = np.load(f)
-#         filenames.append(f)
-#         np_data.append(family_to_images(a))
 
     np_data = np.array(np_data)
     filenames = np.array(filenames)
@@ -199,7 +180,6 @@ if __name__ == '__main__':
         wd = 0.0001
 
     criterion = nn.MSELoss().cuda()
-#     optimizer = optim.Adam(model.parameters())
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=momentum, weight_decay=wd)
     cudnn.benchmark = True
 
@@ -215,7 +195,6 @@ if __name__ == '__main__':
             g = 0.5
         scheduler = StepLR(optimizer, step_size=ss, gamma=0.5)
 
-    # TODO make into cross-validation with nfolds
     for epoch in range(epochs):
         # train model
         model.train()
