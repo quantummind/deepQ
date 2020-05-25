@@ -165,5 +165,5 @@ if __name__ == '__main__':
         compiled_circuits.append(family[best_circuit])
         valid_circuits.append(s)
 
-        np.save('test_5_compiled.npy', compiled_circuits)
-        np.save('test_5_free.npy', valid_circuits)
+        np.save('test_5_burlington_compiled.npy', compiled_circuits)
+        np.save('test_5_burlington_free.npy', valid_circuits)

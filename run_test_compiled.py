@@ -14,8 +14,8 @@ backend = provider.get_backend('ibmq_' + computer)
 bucket_size = 50
 shots = 5000
 
-identities = np.load('test_5_free.npy')
-compiled = np.load('test_5_compiled.npy')
+identities = np.load('test_5_burlington_free.npy')
+compiled = np.load('test_5_burlington_compiled.npy')
 
 def run_type(data, imin, imax):
     circuits = []
