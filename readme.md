@@ -1,6 +1,7 @@
 # Quantum circuit optimizer
 
 A. Zlokapa and A. Gheorghiu, “A deep learning model for noise prediction on near-term quantum devices.” https://arxiv.org/abs/2005.10811
+
 A. Zlokapa and A. Gheorghiu, “A deep learning approach to noise prediction and circuit optimization for near-term quantum devices.” *IEEE/ACM International Conference on High Performance Computing, Networking, Storage and Analysis*, November 2019. 1st place, ACM SRC SC19. 2nd place, ACM SRC International.
 
 ## Abstract
